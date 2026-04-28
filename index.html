@@ -57,6 +57,110 @@
             transform: translateY(-2px);
             box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
         }
+        
+        .pdf-section {
+            margin-top: 50px;
+            border-top: 2px solid #e0e0e0;
+            padding-top: 30px;
+        }
+        
+        .pdf-section h2 {
+            color: #333;
+            font-size: 1.5em;
+            margin-bottom: 20px;
+        }
+        
+        .upload-box {
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 20px;
+            background: #f8f9ff;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .upload-box:hover {
+            background: #f0f2ff;
+            border-color: #764ba2;
+        }
+        
+        .upload-box input {
+            display: none;
+        }
+        
+        .upload-text {
+            color: #666;
+            margin-bottom: 10px;
+        }
+        
+        .file-list {
+            text-align: left;
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            background: #f5f5f5;
+            margin-bottom: 5px;
+            border-radius: 3px;
+        }
+        
+        .file-item button {
+            background: #ff4444;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        
+        .file-item button:hover {
+            background: #cc0000;
+        }
+        
+        .merge-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 1em;
+            transition: transform 0.3s ease;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        
+        .merge-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+        
+        .merge-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            color: #667eea;
+            font-weight: bold;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .status.error {
+            color: #ff4444;
+        }
     </style>
 </head>
 <body>
@@ -64,6 +168,125 @@
         <h1>Jonas sin første nettside</h1>
         <p>Velkommen!</p>
         <a href="https://www.vg.no" target="_blank">IKKE Besøk VG.no</a>
+        
+        <div class="pdf-section">
+            <h2>PDF Merger</h2>
+            <div class="upload-box" id="uploadBox">
+                <p class="upload-text">Click or drag PDF files here to upload</p>
+                <input type="file" id="pdfInput" multiple accept=".pdf" />
+            </div>
+            
+            <div class="file-list" id="fileList" style="display: none;"></div>
+            
+            <button class="merge-button" id="mergeButton" disabled>Merge PDFs</button>
+            <div class="status" id="status"></div>
+        </div>
     </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+    
+    <script>
+        const uploadBox = document.getElementById('uploadBox');
+        const pdfInput = document.getElementById('pdfInput');
+        const fileList = document.getElementById('fileList');
+        const mergeButton = document.getElementById('mergeButton');
+        const status = document.getElementById('status');
+        let selectedFiles = [];
+        
+        // Click to upload
+        uploadBox.addEventListener('click', () => pdfInput.click());
+        
+        // Drag and drop
+        uploadBox.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadBox.style.background = '#e8ebff';
+        });
+        
+        uploadBox.addEventListener('dragleave', () => {
+            uploadBox.style.background = '#f8f9ff';
+        });
+        
+        uploadBox.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadBox.style.background = '#f8f9ff';
+            const files = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf');
+            handleFiles(files);
+        });
+        
+        // File input change
+        pdfInput.addEventListener('change', (e) => {
+            handleFiles(Array.from(e.target.files));
+        });
+        
+        function handleFiles(files) {
+            selectedFiles = [...selectedFiles, ...files];
+            updateFileList();
+        }
+        
+        function updateFileList() {
+            if (selectedFiles.length === 0) {
+                fileList.style.display = 'none';
+                mergeButton.disabled = true;
+                return;
+            }
+            
+            fileList.style.display = 'block';
+            fileList.innerHTML = selectedFiles.map((file, index) => `
+                <div class="file-item">
+                    <span>${file.name}</span>
+                    <button onclick="removeFile(${index})">Remove</button>
+                </div>
+            `).join('');
+            
+            mergeButton.disabled = selectedFiles.length < 2;
+        }
+        
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            updateFileList();
+        }
+        
+        mergeButton.addEventListener('click', async () => {
+            if (selectedFiles.length < 2) return;
+            
+            mergeButton.disabled = true;
+            status.textContent = 'Merging...';
+            status.classList.remove('error');
+            status.style.display = 'block';
+            
+            try {
+                const { PDFDocument } = PDFLib;
+                const mergedPdf = await PDFDocument.create();
+                
+                for (const file of selectedFiles) {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await PDFDocument.load(arrayBuffer);
+                    const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+                    copiedPages.forEach(page => mergedPdf.addPage(page));
+                }
+                
+                const pdfBytes = await mergedPdf.save();
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+                
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'merged.pdf';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                
+                status.textContent = 'PDF merged and downloaded successfully!';
+                status.classList.remove('error');
+            } catch (error) {
+                status.textContent = 'Error merging PDFs: ' + error.message;
+                status.classList.add('error');
+            } finally {
+                mergeButton.disabled = false;
+            }
+        });
+    </script>
 </body>
 </html>
